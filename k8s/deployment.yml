@@ -18,6 +18,10 @@ spec:
         prometheus.io/path: /actuator/prometheus
         prometheus.io/port: "9000"
     spec:
+      volumes:
+        - name: gateway-config-volume
+          configMap:
+            name: gateway-config
       containers:
         - name: gateway-service
           image: gateway-service
@@ -33,14 +37,11 @@ spec:
               value: http://catalog-service
             - name: ORDER_SERVICE_URL
               value: http://order-service
-            - name: SPRING_CLOUD_CONFIG_URI
-              value: http://config-service
-            - name: SPRING_DATA_REDIS_HOST
-              value: polar-redis
             - name: SPA_URL
               value: http://polar-ui
-            - name: SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI
-              value: http://polar-keycloak/realms/PolarBookshop
+          volumeMounts:
+            - name:
+              mountPath: /workspace/config
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
