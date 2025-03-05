@@ -1,4 +1,4 @@
-package com.polarbookshop.gateway_service.user;
+package com.polarbookshop.gateway_service.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,6 +20,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.test.web.reactive.server.WebTestClientConfigurer;
 
 import com.polarbookshop.gateway_service.config.SecurityConfig;
+import com.polarbookshop.gateway_service.domain.User;
+import com.polarbookshop.gateway_service.web.UserController;
 
 @WebFluxTest(UserController.class)
 @Import(SecurityConfig.class)

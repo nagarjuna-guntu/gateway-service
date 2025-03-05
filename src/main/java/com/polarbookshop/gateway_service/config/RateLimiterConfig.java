@@ -15,7 +15,7 @@ public class RateLimiterConfig {
 	KeyResolver keyResolver() {
 		return exchange -> exchange.getPrincipal()
 				.map(Principal::getName)
-				.defaultIfEmpty("1");
+				.defaultIfEmpty("anonymous");
 	}
 	
 

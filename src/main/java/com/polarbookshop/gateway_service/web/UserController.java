@@ -1,10 +1,12 @@
-package com.polarbookshop.gateway_service.user;
+package com.polarbookshop.gateway_service.web;
 
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.polarbookshop.gateway_service.domain.User;
 
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;

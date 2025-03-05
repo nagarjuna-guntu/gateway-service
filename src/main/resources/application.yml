@@ -1,150 +1,170 @@
 server:
   port: 9000
-  netty:
-    connection-timeout: 2s
-    idle-timeout: 15s
   shutdown: graceful
+  netty:
+    connection-timeout: 5s #Time limit for a connection to be established.
+    idle-timeout: 15s #Time limit for a connection to be idle.
 
 spring:
   application:
     name: gateway-service
   lifecycle:
     timeout-per-shutdown-phase: 15s
-  config:
-    import: "" #"optional:configserver:"
-  cloud:
-    config:
-      enabled: false
-      uri: http://localhost:8888
-      request-connect-timeout: 5000 # 5s
-      request-read-timeout: 5000 # 5s
-      fail-fast: false # In production, set to true
-      retry:
-        max-attempts: 6
-        initial-interval: 1000 # 1s
-        max-interval: 2000 # 2s
-        multiplier: 1.1
-    gateway:
-      httpclient:
-        connect-timeout: 2000
-        response-timeout: 5s
-        pool:
-          type: elastic
-          max-idle-time: 15s
-          max-life-time: 60s
-      default-filters:
-        - SaveSession # Filter for saving session data before moving request to downstream
-        - TokenRelay  # Propagates the access-token to the downsteram as Authorization Bearer request header
-        - name: RequestRateLimiter
+    
+spring.config.import: "" #"optional:configserver:"
+
+spring.cloud.config:
+  enabled: false
+  uri: http://localhost:8888
+  request-connect-timeout: 5000 # 5s #Time limit for a connection to be established.
+  request-read-timeout: 5000 # 5s
+  fail-fast: false # In production, set to true
+  retry:
+    max-attempts: 6
+    initial-interval: 1000 # 1s
+    max-interval: 2000 # 2s
+    multiplier: 1.1
+
+spring.cloud.gateway:
+  httpclient: #Netty uses HTTPCLIENT to forward request to downn stream services.
+    connect-timeout: 5000 #Time limit for a connection to be established.
+    response-timeout: 5s  #TimeLimiter will take precedence when both configured.
+    pool:        
+      type: elastic # connection pool type (elastic, fixed, or disabled), default is elastic
+      max-idle-time: 15s
+      max-life-time: 60s
+  default-filters:
+    - SaveSession # Filter for saving session data before moving request to downstream
+    - TokenRelay  # Propagates the access-token to the downsteram as Authorization Bearer request header
+    - name: RequestRateLimiter #It is server-side rate limiter controls in-coming traffic.
+      args:
+        redis-rate-limiter.replenishRate: 10  # Total no.of tokens per sec
+        redis-rate-limiter.burstCapacity: 20  # Max no.of tokens per sec
+        redis-rate-limiter.requestedTokens: 1 # 1 token per request
+    - name: Retry
+      args:
+        retries: 3
+        methods: GET
+        series: SERVER-ERROR
+        exceptions: java.io.IOException, java.util.concurrent.TimeoutException
+        backoff:
+          firstBackoff: 50ms
+          maxBackOff: 500ms
+          factor: 2
+          basedOnPreviousValue: false       
+  routes:
+    - id: spa-route
+      uri: ${SPA_URL:http://localhost:9004}
+      predicates:
+        - Path=/, /*.css, /*.js, /favicon.ico
+    - id: catalog-route
+      uri: ${CATALOG_SERVICE_URL:http://localhost:9001}/books
+      predicates:
+        - Path=/books/**
+      filters:
+        - name: CircuitBreaker 
           args:
-            redis-rate-limiter:
-              replenishRate: 10
-              burstCapacity: 20
-              requestedTokens: 1 
-        - name: Retry
+            name: catalogCircuitBreaker
+            fallbackUri: forward:/catalog-fallback   
+    - id: order-route
+      uri: ${ORDER_SERVICE_URL:http://localhost:9002}/orders
+      predicates:
+        - Path=/orders/**
+      filters:
+        - name: CircuitBreaker
           args:
-            retries: 3
-            methods: GET
-            series: SERVER-ERROR
-            exceptions: java.io.IOException, java.util.concurrent.TimeoutException
-            backoff:
-              firstBackoff: 50ms
-              maxBackOff: 500ms
-              factor: 2
-              basedOnPreviousValue: false
-             
-      routes:
-        - id: spa-route
-          uri: ${SPA_URL:http://localhost:9004}
-          predicates:
-            - Path=/,/*.css,/*.js,/favicon.ico
-        - id: catalog-route
-          uri: ${CATALOG_SERVICE_URL:http://localhost:9001}/books
-          predicates:
-            - Path=/books/**
-          filters:
-            - name: CircuitBreaker 
-              args:
-                name: catalogCircuitBreaker
-                fallbackUri: forward:/catalog-fallback   
-        - id: order-route
-          uri: ${ORDER_SERVICE_URL:http://localhost:9002}/orders
-          predicates:
-            - Path=/orders/**
-          filters:
-            - name: CircuitBreaker
-              args:
-               name: orderCircuitBreaker
-                              
-  session:
-    store-type: redis
-    timeout: 10m
-    redis:
-      namespace: polar:gateway
+            name: orderCircuitBreaker    
+                                  
+spring.session:
+  store-type: redis #Instruct Spring to use redis session
+  timeout: 10m  #session timeout, we can also set using server.reactive.session.timeout or server.servlet.session.timeout
+  redis:
+    namespace: polar:gateway  #Namespace for keys used to store sessions.
+                 
+spring.data:
+  redis:
+    host: localhost
+    port: 6379
+    connect-timeout: 5s #Time limit for a connection to be established
+    timeout: 5s #Time limit for a response  
+    
+spring.security.oauth2:
+  client:
+    registration:
+      keycloak:
+        client-id: gateway-service
+        client-secret: polar-keycloak-secret  
+        scope: openid, roles
+    provider:
+      keycloak:
+        issuer-uri: http://localhost:8080/realms/PolarBookshop  
                   
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      connect-timeout: 2s
-      timeout: 1s
+resilience4j.circuitbreaker:
+  configs:
+    default:
+      slidingWindowSize: 20
+      failureRateTheshold: 50
+      permittedNumberOfCallsInHalfOpenState: 4
+      waitDurationInOpenState: 15000
       
-  security:
-    oauth2:
-      client:
-        registration:
-          keycloak:
-            client-id: gateway-service
-            client-secret: polar-keycloak-secret  
-            scope: openid, roles
-        provider:
-          keycloak:
-            issuer-uri: http://localhost:8080/realms/PolarBookshop        
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        slidingWindowSize: 20
-        failureRateTheshold: 50
-        permittedNumberOfCallsInHalfOpenState: 5
-        waitDurationInOpenState: 15000
-  timelimiter:
-    configs:
-      default:
-        timeoutDuration: 5s
+resilience4j.timelimiter:
+  configs:
+    default:
+      timeoutDuration: 5s
+      
 info:
-  system: Polar Bookshop                  
-management:
-  endpoints:
-    web:
-      exposure:
-        include: refresh, health, metrics, info, loggers, gateway, configprops
-  endpoint:
-    health:
-      show-details: always
-      show-components: always
-      probes:
-        enabled: true
-  metrics:
-    tags:
-      application: ${spring.application.name}  
-  tracing:
-    sampling:
-      probability: 1.0
-  info:
-    env:
+  system: Polar Bookshop 
+                   
+management.endpoints:
+  web:
+    exposure:
+      include: refresh, health, metrics, info, loggers, gateway, configprops
+      
+management.endpoint:
+  health:
+    show-details: always
+    show-components: always
+    probes:
       enabled: true
-    java:
-      enabled: true
-    os:
-      enabled: true  
-  
+    group:
+      rediness:
+        include: readinessState, redis
         
+management.health:
+  redis:
+    enabled: true
+    
+management.metrics:
+  tags:
+    application: ${spring.application.name}  
+    
+management.tracing:
+  sampling:
+    probability: 1.0
+    
+management.info:
+  env:
+    enabled: true
+  java:
+    enabled: true
+  os:
+    enabled: true  
+         
 logging:
   group:
     circuitbreaker: io.github.resilience4j, org.springframework.cloud.circuitbreaker
+  level:
+    circuitbreaker: debug  
   pattern:
     correlation: "%clr([${spring.application.name:},%X{traceId:-},%X{spanId:-}]){yellow} "
-    circuitbreaker: info
   include-application-name: false
       
+otel:
+  service.name: gateway-service 
+  resource.attributes: deployment.environment=dev,service.name=gateway-service
+  exporter.otlp.protocol: grpc
+  logs.exporter: otlp
+  traces.exporter: otlp
+  metrics.exporter: otlp
+  instrumentation.micrometer.enabled: true  #Enable Micrometer metrics bridge
+  exporter.otlp.endpoint: http://localhost:4317

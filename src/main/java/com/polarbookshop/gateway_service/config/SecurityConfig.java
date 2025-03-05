@@ -18,6 +18,7 @@ import org.springframework.security.web.server.authentication.HttpStatusServerEn
 import org.springframework.security.web.server.authentication.logout.ServerLogoutSuccessHandler;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
 import org.springframework.security.web.server.csrf.CsrfToken;
+import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestHandler;
 import org.springframework.security.web.server.csrf.XorServerCsrfTokenRequestAttributeHandler;
 import org.springframework.web.server.WebFilter;
@@ -27,52 +28,45 @@ import reactor.core.publisher.Mono;
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
-	
+
 	@Autowired
 	private ReactiveClientRegistrationRepository reactiveClientRegistrationRepository;
-	
+
 	@Bean
 	ServerOAuth2AuthorizedClientRepository sessionAuthorizedClientRepository() {
 		return new WebSessionServerOAuth2AuthorizedClientRepository();
 	}
-	
+
 	@Bean
 	SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
-		CookieServerCsrfTokenRepository tokenRepository = CookieServerCsrfTokenRepository.withHttpOnlyFalse();
-		XorServerCsrfTokenRequestAttributeHandler delegate = new XorServerCsrfTokenRequestAttributeHandler();
-		ServerCsrfTokenRequestHandler requestHandler = delegate::handle;
-		http.authorizeExchange(authorize -> authorize
-				.pathMatchers("/", "/*.css", "/*.js", "/favicon.ico").permitAll()
-				.pathMatchers(HttpMethod.GET, "/books/**").permitAll()
-				.pathMatchers("/actuator/**").permitAll()
+		CookieServerCsrfTokenRepository cookieCSRFTokenRepository = CookieServerCsrfTokenRepository.withHttpOnlyFalse();
+		http.authorizeExchange(authorize -> authorize.pathMatchers("/", "/*.css", "/*.js", "/favicon.ico").permitAll()
+				.pathMatchers(HttpMethod.GET, "/books/**").permitAll().pathMatchers("/actuator/**").permitAll()
 				.anyExchange().authenticated())
-		    .csrf(csrf -> csrf
-		    	.csrfTokenRepository(tokenRepository)
-		    	.csrfTokenRequestHandler(requestHandler))
-		    .oauth2Login(withDefaults())
-		    .exceptionHandling(exceptionHandling -> exceptionHandling
-		    	.authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
-		    .logout(logout -> logout
-		    	.logoutSuccessHandler(oidcLogoutSuccessHandler()));
+				.exceptionHandling(exceptionHandling -> exceptionHandling
+						.authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
+				.csrf(csrf -> csrf.csrfTokenRepository(cookieCSRFTokenRepository)
+						.csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler()))
+				.oauth2Login(withDefaults()).logout(logout -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler()));
 		return http.build();
-		
+
 	}
 
 	private ServerLogoutSuccessHandler oidcLogoutSuccessHandler() {
-		var oidcLogoutSuccessHandler = new OidcClientInitiatedServerLogoutSuccessHandler(this.reactiveClientRegistrationRepository);
+		var oidcLogoutSuccessHandler = new OidcClientInitiatedServerLogoutSuccessHandler(
+				this.reactiveClientRegistrationRepository);
 		oidcLogoutSuccessHandler.setPostLogoutRedirectUri("{baseUrl}");
 		return oidcLogoutSuccessHandler;
 	}
-	
-	@Bean
-	WebFilter csrfWebFilter() {
-		// Required because of https://github.com/spring-projects/spring-security/issues/5766		
-		return (exchange, chain) -> {
-	        Mono<CsrfToken> csrfToken = exchange.getAttributeOrDefault(CsrfToken.class.getName(), Mono.empty());
-	        return csrfToken.doOnSuccess(_ -> {
-	            /* Ensures the token is subscribed to. */
-	        }).then(chain.filter(exchange));
-	    };
-	}
+
+	 
+	@Bean 
+	WebFilter csrfWebFilter() {  
+		return (exchange, chain) -> { 
+			Mono<CsrfToken> csrfToken = exchange.getAttributeOrDefault(CsrfToken.class.getName(), Mono.empty());
+			return csrfToken.doOnSuccess(_ -> { //Ensures the token is subscribed to.
+			}).then(chain.filter(exchange)); 
+			}; 
+		}
 
 }

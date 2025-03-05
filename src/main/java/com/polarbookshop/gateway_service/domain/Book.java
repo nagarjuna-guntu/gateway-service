@@ -1,4 +1,4 @@
-package com.polarbookshop.gateway_service.web;
+package com.polarbookshop.gateway_service.domain;
 
 import java.util.List;
 
