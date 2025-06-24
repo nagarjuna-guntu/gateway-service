@@ -40,14 +40,15 @@ public class SecurityConfig {
 	@Bean
 	SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
 		CookieServerCsrfTokenRepository cookieCSRFTokenRepository = CookieServerCsrfTokenRepository.withHttpOnlyFalse();
-		http.authorizeExchange(authorize -> authorize.pathMatchers("/", "/*.css", "/*.js", "/favicon.ico").permitAll()
-				.pathMatchers(HttpMethod.GET, "/books/**").permitAll().pathMatchers("/actuator/**").permitAll()
+		http.authorizeExchange(authorize -> authorize.pathMatchers(HttpMethod.GET, "/books/**").permitAll()
+				.pathMatchers("/actuator/**").permitAll()
 				.anyExchange().authenticated())
 				.exceptionHandling(exceptionHandling -> exceptionHandling
 						.authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
 				.csrf(csrf -> csrf.csrfTokenRepository(cookieCSRFTokenRepository)
 						.csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler()))
-				.oauth2Login(withDefaults()).logout(logout -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler()));
+				.oauth2Login(withDefaults())
+				.logout(logout -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler()));
 		return http.build();
 
 	}

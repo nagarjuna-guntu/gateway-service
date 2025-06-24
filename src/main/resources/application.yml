@@ -54,7 +54,7 @@ spring.cloud.gateway:
           basedOnPreviousValue: false       
   routes:
     - id: spa-route
-      uri: ${SPA_URL:http://localhost:9004}
+      uri: ${SPA_URL:http://localhost:3000}
       predicates:
         - Path=/, /*.css, /*.js, /favicon.ico
     - id: catalog-route
@@ -103,7 +103,7 @@ resilience4j.circuitbreaker:
   configs:
     default:
       slidingWindowSize: 20
-      failureRateTheshold: 50
+      failureRateThreshold: 50
       permittedNumberOfCallsInHalfOpenState: 4
       waitDurationInOpenState: 15000
       
@@ -160,8 +160,8 @@ logging:
   include-application-name: false
       
 otel:
-  service.name: gateway-service 
-  resource.attributes: deployment.environment=dev,service.name=gateway-service
+  service.name: ${spring.application.name} 
+  resource.attributes: service.name=${spring.application.name}, environment=dev
   exporter.otlp.protocol: grpc
   logs.exporter: otlp
   traces.exporter: otlp
